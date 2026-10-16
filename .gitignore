@@ -1,0 +1,8 @@
+__pycache__/
+result
+result-*
+
+# Keep project notes and local agent skills out of the published repository.
+*.md
+!/README.md
+/skills/
