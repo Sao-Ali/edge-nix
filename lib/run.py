@@ -8,10 +8,18 @@ import onnxruntime as ort
 
 
 DTYPES = {
+    "tensor(float16)": np.float16,
     "tensor(float)": np.float32,
     "tensor(double)": np.float64,
+    "tensor(int8)": np.int8,
+    "tensor(int16)": np.int16,
     "tensor(int32)": np.int32,
     "tensor(int64)": np.int64,
+    "tensor(uint8)": np.uint8,
+    "tensor(uint16)": np.uint16,
+    "tensor(uint32)": np.uint32,
+    "tensor(uint64)": np.uint64,
+    "tensor(bool)": np.bool_,
 }
 
 

@@ -34,7 +34,7 @@ mkOnnxBundle {
 }
 ```
 
-The `edge-run` command is a smoke-test interface: pass a JSON object whose keys match the model's input names, or use `@input.json` to read them from a file. The first backend accepts float and integer tensor inputs and uses ONNX Runtime's CPU execution provider. `maxModelBytes` bounds the model file only; it does not predict peak RAM use.
+The `edge-run` command is a smoke-test interface: pass a JSON object whose keys match the model's input names, or use `@input.json` to read them from a file. The first backend accepts float16/32/64, signed and unsigned 8/16/32/64-bit integer, and boolean tensor inputs, and uses ONNX Runtime's CPU execution provider. `maxModelBytes` bounds the model file only; it does not predict peak RAM use.
 
 ## VM test
 
