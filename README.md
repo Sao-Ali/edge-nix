@@ -1,6 +1,6 @@
 # edge-nix
 
-`edge-nix` is an early experiment in using Nix to prepare models for edge inference. It is inspired by [Robotnix](https://github.com/nix-community/robotnix): Nix coordinates existing tools and records the inputs to a build. It does not implement a model converter or quantizer itself.
+`edge-nix` is an early experiment in using Nix to prepare models for edge inference. Nix coordinates existing tools and records the inputs to a build. `edge-nix` does not implement a model converter or quantizer itself.
 
 The first backend accepts an ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and produces a model, a manifest, and a CPU inference command. A recipe can set a maximum artifact size, an early edge constraint. The example uses the pretrained [ONNX Model Zoo MNIST classifier](https://huggingface.co/onnxmodelzoo/mnist-12), which recognizes handwritten digits. This is a starting point for device-specific backends, not a VENTUNO Q accelerator build.
 
