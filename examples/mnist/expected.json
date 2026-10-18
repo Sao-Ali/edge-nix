@@ -1,0 +1,8 @@
+{
+  "outputs": {
+    "Plus214_Output_0": {
+      "shape": [1, 10],
+      "argmax": 7
+    }
+  }
+}

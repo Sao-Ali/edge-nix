@@ -6,3 +6,4 @@ result-*
 *.md
 !/README.md
 /skills/
+/project-notes/

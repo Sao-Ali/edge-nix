@@ -8,9 +8,18 @@ let
   lib = pkgs.lib;
   supportedQuantization = [ "none" "dynamic-int8" ];
   runtimePython = pkgs.python3.withPackages (ps: [ ps.numpy ps.onnxruntime ]);
-  quantizerPython = pkgs.python3.withPackages (ps: [ ps.numpy ps.onnx ps.onnxruntime ps.sympy ]);
+  buildPython = pkgs.python3.withPackages (ps: [ ps.numpy ps.onnx ps.onnxruntime ps.sympy ]);
+  manifestConfig = pkgs.writeText "${name}-manifest-config.json" (builtins.toJSON {
+    inherit name quantization maxModelBytes;
+    executionProvider = "CPUExecutionProvider";
+    format = "onnx";
+    sourceModel = toString modelFile;
+    runtime = "onnxruntime";
+    runtimeVersion = pkgs.python3Packages.onnxruntime.version;
+    targetSystem = pkgs.stdenv.hostPlatform.system;
+  });
   preparedModel = pkgs.runCommand "${name}-model" {
-    nativeBuildInputs = lib.optional (quantization == "dynamic-int8") quantizerPython;
+    nativeBuildInputs = [ buildPython ];
   } ''
     mkdir -p "$out"
     ${if quantization == "dynamic-int8" then ''
@@ -26,17 +35,8 @@ let
         exit 1
       fi
     ''}
+    python ${./manifest.py} "$out/model.onnx" ${manifestConfig}
   '';
-  manifest = pkgs.writeText "${name}-manifest.json" (builtins.toJSON {
-    inherit name quantization;
-    inherit maxModelBytes;
-    executionProvider = "CPUExecutionProvider";
-    format = "onnx";
-    model = toString modelFile;
-    runtime = "onnxruntime";
-    runtimeVersion = pkgs.python3Packages.onnxruntime.version;
-    targetSystem = pkgs.stdenv.hostPlatform.system;
-  });
 in
 assert lib.assertMsg (builtins.elem quantization supportedQuantization)
   "edge-nix: quantization must be one of ${lib.concatStringsSep ", " supportedQuantization}";
@@ -45,10 +45,15 @@ assert lib.assertMsg (maxModelBytes == null || (builtins.isInt maxModelBytes && 
 pkgs.runCommand name { } ''
   mkdir -p "$out/bin"
   ln -s ${preparedModel}/model.onnx "$out/model.onnx"
-  ln -s ${manifest} "$out/manifest.json"
+  ln -s ${preparedModel}/manifest.json "$out/manifest.json"
   cat > "$out/bin/edge-run" <<'EOF'
 #!${pkgs.runtimeShell}
 exec ${runtimePython}/bin/python ${./run.py} ${preparedModel}/model.onnx "$@"
 EOF
-  chmod +x "$out/bin/edge-run"
+  cat > "$out/bin/edge-validate" <<'EOF'
+#!${pkgs.runtimeShell}
+export PYTHONPATH=${./.}
+exec ${runtimePython}/bin/python ${./validate.py} ${preparedModel}/model.onnx ${preparedModel}/manifest.json "$@"
+EOF
+  chmod +x "$out/bin/edge-run" "$out/bin/edge-validate"
 ''

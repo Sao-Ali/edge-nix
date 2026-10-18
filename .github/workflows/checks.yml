@@ -1,0 +1,29 @@
+name: Bundle checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            system: x86_64-linux
+          - runner: ubuntu-24.04-arm
+            system: aarch64-linux
+          - runner: macos-15
+            system: aarch64-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: experimental-features = nix-command flakes
+      - run: |
+          nix build --print-build-logs \
+            ".#checks.${{ matrix.system }}.demo-fp32" \
+            ".#checks.${{ matrix.system }}.demo-int8" \
+            ".#checks.${{ matrix.system }}.demo-int64"

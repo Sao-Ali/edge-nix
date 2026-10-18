@@ -23,17 +23,15 @@ DTYPES = {
 }
 
 
-def main() -> None:
-    if len(sys.argv) != 3:
-        raise SystemExit("usage: edge-run '<JSON inputs>' or edge-run @input.json")
-
-    session = ort.InferenceSession(sys.argv[1], providers=["CPUExecutionProvider"])
-    argument = sys.argv[2]
+def load_argument(argument):
     if argument.startswith("@"):
         with open(argument[1:], encoding="utf-8") as handle:
-            supplied = json.load(handle)
-    else:
-        supplied = json.loads(argument)
+            return json.load(handle)
+    return json.loads(argument)
+
+
+def run_model(model_path, supplied):
+    session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
     if not isinstance(supplied, dict):
         raise SystemExit("inputs must be a JSON object keyed by model input name")
 
@@ -46,7 +44,13 @@ def main() -> None:
         inputs[item.name] = np.asarray(supplied[item.name], dtype=DTYPES[item.type])
 
     values = session.run(None, inputs)
-    print(json.dumps({item.name: value.tolist() for item, value in zip(session.get_outputs(), values)}))
+    return {item.name: value.tolist() for item, value in zip(session.get_outputs(), values)}
+
+
+def main() -> None:
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: edge-run '<JSON inputs>' or edge-run @input.json")
+    print(json.dumps(run_model(sys.argv[1], load_argument(sys.argv[2]))))
 
 
 if __name__ == "__main__":

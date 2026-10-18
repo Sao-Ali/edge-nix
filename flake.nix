@@ -6,10 +6,7 @@
   outputs = { self, nixpkgs }:
     let
       systems = [ "aarch64-darwin" "x86_64-linux" "aarch64-linux" ];
-      linuxSystems = [ "x86_64-linux" "aarch64-linux" ];
       forSystems = f: nixpkgs.lib.genAttrs systems
-        (system: f (import nixpkgs { inherit system; }));
-      forLinux = f: nixpkgs.lib.genAttrs linuxSystems
         (system: f (import nixpkgs { inherit system; }));
     in
     {
@@ -19,6 +16,11 @@
         let
           mkOnnxBundle = self.lib.mkOnnxBundle pkgs;
           model = import ./examples/mnist/model.nix { inherit pkgs; };
+          integerModel = pkgs.runCommand "int64-identity.onnx" {
+            nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.onnx ])) ];
+          } ''
+            python ${./examples/int64-identity/generate.py} "$out"
+          '';
         in
         {
           demo-fp32 = mkOnnxBundle {
@@ -31,15 +33,37 @@
             quantization = "dynamic-int8";
             maxModelBytes = 1048576;
           };
+          demo-int64 = mkOnnxBundle {
+            name = "edge-nix-demo-int64";
+            modelFile = integerModel;
+          };
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.demo-int8;
         });
 
-      checks = forLinux (pkgs: {
-        vm = import ./tests/vm.nix {
-          inherit pkgs;
-          fp32 = self.packages.${pkgs.stdenv.hostPlatform.system}.demo-fp32;
-          int8 = self.packages.${pkgs.stdenv.hostPlatform.system}.demo-int8;
-        };
-      });
+      checks = forSystems (pkgs:
+        let
+          packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+          mkValidation = bundle: sample: expected: extraArgs:
+            pkgs.runCommand "${bundle.name}-validation" { } ''
+            ${bundle}/bin/edge-validate \
+              @${sample} \
+              @${expected} ${extraArgs} > "$out"
+          '';
+        in
+        {
+          demo-fp32 = mkValidation packages.demo-fp32
+            ./examples/mnist/sample.json ./examples/mnist/expected.json "";
+          demo-int8 = mkValidation packages.demo-int8
+            ./examples/mnist/sample.json ./examples/mnist/expected.json
+            "--reference-model ${packages.demo-fp32}/model.onnx --atol 0.25 --rtol 0.01";
+          demo-int64 = mkValidation packages.demo-int64
+            ./examples/int64-identity/sample.json ./examples/int64-identity/expected.json "";
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          vm = import ./tests/vm.nix {
+            inherit pkgs;
+            fp32 = packages.demo-fp32;
+            int8 = packages.demo-int8;
+          };
+        });
     };
 }
