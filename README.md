@@ -1,10 +1,25 @@
 # edge-nix
 
-`edge-nix` is an early experiment in using Nix to prepare models for edge inference. Nix coordinates existing tools and records the inputs to a build. `edge-nix` does not implement a model converter or quantizer itself.
+`edge-nix` uses Nix to package ONNX models for edge inference. A developer supplies a model and build settings, then gets a transferable archive with the prepared model and a manifest. Nix coordinates existing tools and records the build inputs. `edge-nix` does not transfer files to a device.
 
-The first backend accepts an ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and produces a model, a manifest, and a CPU inference command. A recipe can set a maximum artifact size, an early edge constraint. The example uses the pretrained [ONNX Model Zoo MNIST classifier](https://huggingface.co/onnxmodelzoo/mnist-12), which recognizes handwritten digits. This is a starting point for device-specific backends, not a VENTUNO Q accelerator build.
+The current backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. The archive is portable, but it does not include an edge-device runtime or support the VENTUNO Q NPU yet. The build output also has host-only inference and validation commands for development.
 
-## Build the example
+## Use edge-nix in your project
+
+[examples/consumer](examples/consumer) is a separate flake with its own `model.onnx` and validation fixtures. From that directory, build it against this checkout:
+
+```sh
+cd examples/consumer
+nix build --override-input edgeNix path:../.. --no-write-lock-file
+tar -tzf result/edge-package.tar.gz
+./result/bin/edge-validate @sample.json @expected.json
+```
+
+In your own project, add `edgeNix` as a flake input and call `edgeNix.lib.mkOnnxBundle pkgs` as shown in [the consumer flake](examples/consumer/flake.nix). Replace its `model.onnx`, `sample.json`, and `expected.json` with your files. Run `nix build` to make the archive and `nix flake check` to run validation in your pipeline. You do not need a connected device for either command.
+
+The file to transfer is `result/edge-package.tar.gz`. It contains only regular files named `model.onnx` and `manifest.json`. The `result/bin` commands and the convenience links at the root of `result` refer to the build host's Nix store; do not copy `result` as a device package. The manifest records the target system and required Python, NumPy, and ONNX Runtime versions. Those runtime packages are not inside the archive, so the target must provide compatible dependencies.
+
+## Build the included MNIST example
 
 On Linux or Apple Silicon macOS with flakes enabled:
 
@@ -18,15 +33,15 @@ nix build .#demo-int8
 ./result/bin/edge-validate @examples/mnist/sample.json @examples/mnist/expected.json
 ```
 
-Both `edge-run` commands return ten scores under `Plus214_Output_0`; the highest score should be at index `7`, the digit in the sample image. `edge-validate` checks the built model's size and SHA-256 against its manifest, runs inference, checks the expected output shape and class, and prints a JSON report. The output directory also contains `model.onnx` and `manifest.json`. Packages are defined for `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin` so the CPU path can also be checked during development on a Mac.
+Both `edge-run` commands return ten scores under `Plus214_Output_0`; the highest score should be at index `7`, the digit in the sample image. `edge-validate` extracts the archive, checks its files and model hash, runs inference, checks the expected output shape and class, and prints a JSON report. Packages are defined for `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin` so the CPU path can also be checked during development on a Mac.
 
 The model is fetched from a pinned upstream revision with a verified hash in [examples/mnist/model.nix](examples/mnist/model.nix). `sample.json` contains the first image from the [MNIST test set](https://storage.googleapis.com/cvdf-datasets/mnist/t10k-images-idx3-ubyte.gz), scaled to the `[0, 1]` range required by the model. Its known label is `7`. The sample shows that both variants can classify a real image; it is not a broad accuracy or performance evaluation.
 
-Use an existing ONNX file in another flake:
+The bundle function accepts these settings in another flake:
 
 ```nix
 let
-  mkOnnxBundle = edge-nix.lib.mkOnnxBundle pkgs;
+  mkOnnxBundle = edgeNix.lib.mkOnnxBundle pkgs;
 in
 mkOnnxBundle {
   name = "my-edge-model";
@@ -36,11 +51,11 @@ mkOnnxBundle {
 }
 ```
 
-The `edge-run` command is a smoke-test interface: pass a JSON object whose keys match the model's input names, or use `@input.json` to read them from a file. The first backend accepts float16/32/64, signed and unsigned 8/16/32/64-bit integer, and boolean tensor inputs, and uses ONNX Runtime's CPU execution provider. `maxModelBytes` bounds the model file only; it does not predict peak RAM use.
+The `edge-run` command is a host-only smoke-test interface: pass a JSON object whose keys match the model's input names, or use `@input.json` to read them from a file. The CPU backend accepts float16/32/64, signed and unsigned 8/16/32/64-bit integer, and boolean tensor inputs. `maxModelBytes` bounds the packaged model file only; it does not predict peak RAM use. Models with ONNX external data files are rejected.
 
-`manifest.json` records the built model's byte size, SHA-256, input and output names, types and shapes, source model path, quantization setting, runtime version, and target system. The build checks that the ONNX graph is valid and loadable. The manifest describes this CPU bundle; it does not claim that another execution provider can run the model.
+`manifest.json` version 2 records the source and packaged model sizes and SHA-256 hashes, input and output names, types and shapes, quantization setting, runtime requirements, and target system. The build checks that the ONNX graph is valid and loadable. The archive contains no Nix store paths or symlinks.
 
-For another model, provide `edge-validate` with an input JSON object and an expectation JSON object. Each entry under `outputs` can specify `shape`, flattened `argmax`, or `values`. Values match exactly unless `atol` or `rtol` is supplied. See [examples/mnist/expected.json](examples/mnist/expected.json). To compare a bundle against another ONNX model on the same input, add `--reference-model path/to/reference.onnx --atol 0.25 --rtol 0.01`; the report includes the maximum absolute output difference and fails if the tolerances are exceeded.
+For another model, provide `edge-validate` with an input JSON object and an expectation JSON object. Each entry under `outputs` can specify `shape`, flattened `argmax`, or `values`. Values match exactly unless `atol` or `rtol` is supplied. See [examples/mnist/expected.json](examples/mnist/expected.json). To compare two archives on the same input, add `--reference-archive path/to/reference.tar.gz --atol 0.25 --rtol 0.01`; the report includes the maximum absolute output difference and fails if the tolerances are exceeded.
 
 ## Automated checks
 
@@ -55,7 +70,7 @@ The INT8 check also compares its scores with the FP32 model on the sample image.
 
 `demo-int64` is a generated two-element integer identity model. Its check exercises the same bundle and validator with a non-float input and exact output values.
 
-GitHub Actions runs these three checks on x86_64 Linux, aarch64 Linux, and Apple Silicon macOS for pushes and pull requests. The VM test remains a separate Linux check.
+GitHub Actions runs these three checks and the separate consumer flake check on x86_64 Linux, aarch64 Linux, and Apple Silicon macOS for pushes and pull requests. The VM test remains a separate Linux check.
 
 ## VM test
 
@@ -67,4 +82,4 @@ The NixOS VM test boots a Linux guest, runs both example variants, and checks th
 
 ## Next target
 
-The intended first hardware target is the Arduino VENTUNO Q. Its Qualcomm accelerator uses a different export and runtime path from this CPU example. Once the board is available, a backend can wrap that upstream path and add hardware tests while retaining the same idea of a declarative model build.
+The intended first hardware target is the Arduino VENTUNO Q. Its Qualcomm accelerator needs a different export and runtime path from this CPU package. A future backend must package that target-specific output and pass on-board tests before `edge-nix` can claim VENTUNO Q NPU support.

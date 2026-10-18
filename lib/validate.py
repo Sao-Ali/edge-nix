@@ -3,7 +3,9 @@
 import argparse
 import hashlib
 import json
-import sys
+import shutil
+import tarfile
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -11,10 +13,46 @@ import numpy as np
 from run import load_argument, run_model
 
 
+PACKAGE_FILES = {"model.onnx", "manifest.json"}
+STORE_MARKER = b"/nix/store/"
+
+
+def unpack_archive(archive_path, directory):
+    with tarfile.open(archive_path, "r:gz") as archive:
+        members = archive.getmembers()
+        if {member.name for member in members} != PACKAGE_FILES or len(members) != 2:
+            raise ValueError("archive must contain only model.onnx and manifest.json")
+        for member in members:
+            if not member.isfile():
+                raise ValueError(f"archive member is not a regular file: {member.name}")
+            source = archive.extractfile(member)
+            if source is None:
+                raise ValueError(f"cannot read archive member: {member.name}")
+            destination = directory / member.name
+            with source, destination.open("wb") as output:
+                shutil.copyfileobj(source, output)
+            if contains_store_reference(destination):
+                raise ValueError(f"archive member contains a Nix store reference: {member.name}")
+    return directory / "model.onnx", directory / "manifest.json"
+
+
+def contains_store_reference(path):
+    tail = b""
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            data = tail + chunk
+            if STORE_MARKER in data:
+                return True
+            tail = data[-(len(STORE_MARKER) - 1):]
+    return False
+
+
 def check_manifest(model_path, manifest_path):
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    if manifest.get("manifestVersion") != 1:
+    if manifest.get("manifestVersion") != 2:
         raise ValueError("unsupported manifest version")
+    if manifest.get("modelFile") != "model.onnx":
+        raise ValueError("manifest modelFile must be model.onnx")
     model_file = Path(model_path)
     model_size = model_file.stat().st_size
     if model_size != manifest["modelBytes"]:
@@ -89,26 +127,39 @@ def check_reference(actual, reference, atol, rtol):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("model_path")
-    parser.add_argument("manifest_path")
+    parser.add_argument("archive", help="edge-package.tar.gz")
     parser.add_argument("inputs", help="JSON object or @file.json")
     parser.add_argument("expectations", help="JSON object or @file.json")
+    parser.add_argument("--reference-archive")
     parser.add_argument("--reference-model")
     parser.add_argument("--atol", type=float, default=1e-6)
     parser.add_argument("--rtol", type=float, default=1e-5)
     args = parser.parse_args()
-    manifest = check_manifest(args.model_path, args.manifest_path)
-    supplied = load_argument(args.inputs)
-    actual = run_model(args.model_path, supplied)
-    checks = check_outputs(actual, load_argument(args.expectations))
-    if args.reference_model:
-        reference = run_model(args.reference_model, supplied)
-        checks.extend(check_reference(actual, reference, args.atol, args.rtol))
+    if args.reference_archive and args.reference_model:
+        raise ValueError("choose one reference archive or reference model")
+    with tempfile.TemporaryDirectory() as temp:
+        directory = Path(temp)
+        model_path, manifest_path = unpack_archive(args.archive, directory)
+        manifest = check_manifest(model_path, manifest_path)
+        supplied = load_argument(args.inputs)
+        actual = run_model(str(model_path), supplied)
+        checks = check_outputs(actual, load_argument(args.expectations))
+        reference_model = args.reference_model
+        if args.reference_archive:
+            reference_directory = directory / "reference"
+            reference_directory.mkdir()
+            reference_model, reference_manifest = unpack_archive(
+                args.reference_archive, reference_directory
+            )
+            check_manifest(reference_model, reference_manifest)
+        if reference_model:
+            reference = run_model(str(reference_model), supplied)
+            checks.extend(check_reference(actual, reference, args.atol, args.rtol))
     print(json.dumps({"passed": True, "modelSha256": manifest["modelSha256"], "checks": checks}))
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (KeyError, TypeError, ValueError) as error:
+    except (KeyError, OSError, tarfile.TarError, TypeError, ValueError) as error:
         raise SystemExit(f"edge-validate: {error}") from error

@@ -27,3 +27,7 @@ jobs:
             ".#checks.${{ matrix.system }}.demo-fp32" \
             ".#checks.${{ matrix.system }}.demo-int8" \
             ".#checks.${{ matrix.system }}.demo-int64"
+      - run: |
+          nix build --print-build-logs --no-write-lock-file \
+            --override-input edgeNix path:. \
+            "./examples/consumer#checks.${{ matrix.system }}.package"

@@ -13,9 +13,10 @@ let
     inherit name quantization maxModelBytes;
     executionProvider = "CPUExecutionProvider";
     format = "onnx";
-    sourceModel = toString modelFile;
     runtime = "onnxruntime";
     runtimeVersion = pkgs.python3Packages.onnxruntime.version;
+    pythonVersion = pkgs.python3.version;
+    numpyVersion = pkgs.python3Packages.numpy.version;
     targetSystem = pkgs.stdenv.hostPlatform.system;
   });
   preparedModel = pkgs.runCommand "${name}-model" {
@@ -23,10 +24,10 @@ let
   } ''
     mkdir -p "$out"
     ${if quantization == "dynamic-int8" then ''
-      cp ${lib.escapeShellArg (toString modelFile)} ./input.onnx
+      cp "${modelFile}" ./input.onnx
       python ${./quantize.py} ./input.onnx "$out/model.onnx"
     '' else ''
-      cp ${lib.escapeShellArg (toString modelFile)} "$out/model.onnx"
+      cp "${modelFile}" "$out/model.onnx"
     ''}
     ${lib.optionalString (maxModelBytes != null) ''
       model_bytes=$(wc -c < "$out/model.onnx")
@@ -35,15 +36,24 @@ let
         exit 1
       fi
     ''}
-    python ${./manifest.py} "$out/model.onnx" ${manifestConfig}
+    python ${./manifest.py} "$out/model.onnx" ${manifestConfig} "${modelFile}"
   '';
 in
 assert lib.assertMsg (builtins.elem quantization supportedQuantization)
   "edge-nix: quantization must be one of ${lib.concatStringsSep ", " supportedQuantization}";
 assert lib.assertMsg (maxModelBytes == null || (builtins.isInt maxModelBytes && maxModelBytes > 0))
   "edge-nix: maxModelBytes must be a positive integer or null";
-pkgs.runCommand name { } ''
+pkgs.runCommand name { nativeBuildInputs = [ pkgs.gnutar pkgs.gzip ]; } ''
   mkdir -p "$out/bin"
+  mkdir -p package
+  cp ${preparedModel}/model.onnx package/model.onnx
+  cp ${preparedModel}/manifest.json package/manifest.json
+  if grep -a -q '/nix/store/' package/model.onnx package/manifest.json; then
+    echo "edge-nix: package contains a host Nix store reference" >&2
+    exit 1
+  fi
+  tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+    -C package -cf - manifest.json model.onnx | gzip -n > "$out/edge-package.tar.gz"
   ln -s ${preparedModel}/model.onnx "$out/model.onnx"
   ln -s ${preparedModel}/manifest.json "$out/manifest.json"
   cat > "$out/bin/edge-run" <<'EOF'
@@ -53,7 +63,7 @@ EOF
   cat > "$out/bin/edge-validate" <<'EOF'
 #!${pkgs.runtimeShell}
 export PYTHONPATH=${./.}
-exec ${runtimePython}/bin/python ${./validate.py} ${preparedModel}/model.onnx ${preparedModel}/manifest.json "$@"
+exec ${runtimePython}/bin/python ${./validate.py} "$(dirname "$0")/../edge-package.tar.gz" "$@"
 EOF
   chmod +x "$out/bin/edge-run" "$out/bin/edge-validate"
 ''

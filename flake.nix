@@ -55,7 +55,7 @@
             ./examples/mnist/sample.json ./examples/mnist/expected.json "";
           demo-int8 = mkValidation packages.demo-int8
             ./examples/mnist/sample.json ./examples/mnist/expected.json
-            "--reference-model ${packages.demo-fp32}/model.onnx --atol 0.25 --rtol 0.01";
+            "--reference-archive ${packages.demo-fp32}/edge-package.tar.gz --atol 0.25 --rtol 0.01";
           demo-int64 = mkValidation packages.demo-int64
             ./examples/int64-identity/sample.json ./examples/int64-identity/expected.json "";
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
