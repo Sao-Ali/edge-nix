@@ -3,8 +3,5 @@ result
 result-*
 
 # Keep project notes and local agent skills out of the published repository.
-*.md
-!/README.md
-!/examples/consumer/README.md
 /skills/
 /project-notes/

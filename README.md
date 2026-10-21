@@ -4,6 +4,14 @@
 
 The current backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. The archive is portable, but it does not include an edge-device runtime or support the VENTUNO Q NPU yet. The build output also has host-only inference and validation commands for development.
 
+## What you give it and what you get
+
+You add `edge-nix` as an input to your own Nix flake and pass a path to a single-file `.onnx` model as `modelFile`. There is no upload service: Nix reads that file during the build. Set `quantization` to `"none"` or `"dynamic-int8"`, and optionally set `maxModelBytes` to reject an oversized prepared model. JSON input and expected-output fixtures are optional for packaging but let you check inference in your pipeline.
+
+`nix build` produces `result/edge-package.tar.gz`, containing exactly `model.onnx` and `manifest.json`. The manifest records model hashes, input and output signatures, build settings, target system, and required runtime versions. The archive is the file to transfer to a target with a compatible Python, NumPy, and ONNX Runtime CPU environment. `result/bin/edge-run` and `result/bin/edge-validate` are host-side development commands and are not inside the archive.
+
+This helps when you need a repeatable model preparation step, a traceable artifact, and a CI check that the packaged model still produces expected results before you transfer it to a device. It does not install dependencies or run your application on the device.
+
 ## Use edge-nix in your project
 
 [examples/consumer](examples/consumer) is a separate flake with its own `model.onnx` and validation fixtures. From that directory, build it against this checkout:
@@ -83,3 +91,7 @@ The NixOS VM test boots a Linux guest, runs both example variants, and checks th
 ## Next target
 
 The intended first hardware target is the Arduino VENTUNO Q. Its Qualcomm accelerator needs a different export and runtime path from this CPU package. A future backend must package that target-specific output and pass on-board tests before `edge-nix` can claim VENTUNO Q NPU support.
+
+## License
+
+The edge-nix source code and documentation are available under the [MIT License](LICENSE). You remain responsible for the license of any model you package.
