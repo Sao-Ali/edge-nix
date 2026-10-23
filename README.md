@@ -2,7 +2,30 @@
 
 `edge-nix` uses Nix to package ONNX models for edge inference. A developer supplies a model and build settings, then gets a transferable archive with the prepared model and a manifest. Nix coordinates existing tools and records the build inputs. `edge-nix` does not transfer files to a device.
 
-The current backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. The archive is portable, but it does not include an edge-device runtime or support the VENTUNO Q NPU yet. The build output also has host-only inference and validation commands for development.
+The V1 backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. Its archive contains only a model and manifest; its host-side commands still require Nix. A separate Arduino UNO Q inference-bundle candidate now includes a native ARM64 CPU runner and runtime libraries. It has passed a clean ARM64 Debian container test and still needs a physical-board run.
+
+## UNO Q inference candidate
+
+On a native `aarch64-linux` Nix builder:
+
+```sh
+nix build .#uno-q-demo
+tar -tzf result/edge-inference.tar.gz | head
+scp result/edge-inference.tar.gz arduino@<UNO_Q_IP>:/tmp/
+```
+
+On the stock Debian Linux MPU:
+
+```sh
+mkdir -p ~/edge-inference && cd ~/edge-inference
+tar -xzf /tmp/edge-inference.tar.gz
+cd edge-inference
+./bin/edge-run --check
+./bin/edge-run --input validation/sample.json
+./bin/edge-validate --input validation/sample.json --expected validation/expected.json
+```
+
+See [the UNO Q guide](docs/uno-q.md) for the API, ABI contract, validation, limitations, and current evidence. The archive runs without installing Nix, Python packages, or ONNX Runtime on the target. Hardware support remains a candidate until tested on an actual UNO Q.
 
 ## What you give it and what you get
 
@@ -88,9 +111,9 @@ nix build .#checks.x86_64-linux.vm
 
 The NixOS VM test boots a Linux guest, runs both example variants, and checks their output. It requires a host or remote builder able to run that VM. A VM verifies loading and inference; actual accelerator use, latency, memory, and power must be tested on the target board.
 
-## Next target
+## Roadmap
 
-The intended first hardware target is the Arduino VENTUNO Q. Its Qualcomm accelerator needs a different export and runtime path from this CPU package. A future backend must package that target-specific output and pass on-board tests before `edge-nix` can claim VENTUNO Q NPU support.
+The first physical target is the Arduino UNO Q's Debian Linux MPU using ONNX Runtime CPU. Its STM32 MCU and Arduino Bridge integration are later work. VENTUNO Q is a later accelerator target; its Qualcomm NPU needs a different export and runtime path and must pass on-board tests before any acceleration claim.
 
 ## License
 

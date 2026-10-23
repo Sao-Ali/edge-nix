@@ -37,3 +37,8 @@ jobs:
           nix build --print-build-logs --no-write-lock-file \
             --override-input edgeNix path:. \
             "./examples/consumer#checks.${{ matrix.system }}.package"
+      - if: matrix.system == 'aarch64-linux'
+        run: |
+          nix build --print-build-logs .#checks.aarch64-linux.uno-q-demo .#checks.aarch64-linux.uno-q-demo-int8
+          nix build --print-build-logs .#uno-q-demo
+          tests/clean-debian.sh result/edge-inference.tar.gz
