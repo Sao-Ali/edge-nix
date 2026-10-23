@@ -2,7 +2,7 @@
 
 `edge-nix` uses Nix to package ONNX models for edge inference. A developer supplies a model and build settings, then gets a transferable archive with the prepared model and a manifest. Nix coordinates existing tools and records the build inputs. `edge-nix` does not transfer files to a device.
 
-The V1 backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. Its archive contains only a model and manifest; its host-side commands still require Nix. A separate Arduino UNO Q inference-bundle candidate now includes a native ARM64 CPU runner and runtime libraries. It has passed a clean ARM64 Debian container test and still needs a physical-board run.
+The V1 backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. Its archive contains only a model and manifest; its host-side commands still require Nix. A separate Arduino UNO Q inference bundle includes a native ARM64 CPU runner and runtime libraries. The MNIST example passed in a clean ARM64 Debian container and on a physical UNO Q; resource measurements and broader model coverage remain pending.
 
 ## UNO Q inference candidate
 
@@ -25,7 +25,7 @@ cd edge-inference
 ./bin/edge-validate --input validation/sample.json --expected validation/expected.json
 ```
 
-See [the UNO Q guide](docs/uno-q.md) for the API, ABI contract, validation, limitations, and current evidence. The archive runs without installing Nix, Python packages, or ONNX Runtime on the target. Hardware support remains a candidate until tested on an actual UNO Q.
+See [the UNO Q guide](docs/uno-q.md) for the API, ABI contract, validation, limitations, and current evidence. The tested archive ran without installing Nix, Python packages, or ONNX Runtime on the UNO Q. This is one-model hardware validation, not a general performance or model-compatibility claim.
 
 ## What you give it and what you get
 

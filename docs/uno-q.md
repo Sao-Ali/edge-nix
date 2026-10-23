@@ -2,7 +2,7 @@
 
 This path runs ONNX Runtime's CPU provider on the QRB2210 Debian Linux MPU. It does not use the Qualcomm GPU, DSP, NPU, QNN, or the STM32 MCU. The archive includes a native AArch64 runner, ONNX Runtime, its ELF dependency closure, a bundled glibc loader, model, manifest, and validation fixture. Nix, Python, and ONNX Runtime installation are not required on the board.
 
-**Status:** clean ARM64 Debian container validated; physical UNO Q validation pending SSH authentication. See [the environment record](uno-q-environment.md).
+**Status:** clean ARM64 Debian container and one physical UNO Q MNIST smoke test passed. Resource measurements and broader model coverage remain pending. See [the environment record](uno-q-environment.md).
 
 ## Build and transfer
 
@@ -51,16 +51,18 @@ The manifest records schema 3, artifact type, model hashes and signatures, targe
 ## Compatibility and troubleshooting
 
 - `Exec format error` or `requires aarch64 Linux`: check `uname -m`; the MPU must report `aarch64`. Do not run the archive on the STM32 MCU.
-- `requires Linux kernel 6.1 or newer`: inspect `uname -r`. This provisional floor is checked at runtime and still needs a UNO Q kernel probe.
+- `requires Linux kernel 6.1 or newer`: inspect `uname -r`. The tested UNO Q reported `6.16.7-g0dd6551ae96b`.
 - `error while loading shared libraries`: inspect `lib/` against `manifest.json`; rerun `--check`. Transfer and extract the whole archive without removing files.
 - `bundle hash mismatch`: restore the original archive; a model, runner, library, config or fixture changed after packaging.
 - `input rank mismatch`, `input shape mismatch`, or `unsupported input dtype`: supply a JSON tensor matching the input names, dtypes and shapes in `manifest.json`.
 - `output ... differs`: check the fixture and its numerical tolerances; `edge-validate` exits nonzero.
 
-The shell launcher uses the packaged loader and library directory. ELF interpreter, `DT_NEEDED`, RPATH and AArch64 class are checked during packaging. Some upstream ELF files retain embedded Nix store strings in diagnostic or provider-path data; their counts are recorded in the manifest. The clean Debian execution test showed they did not require a Nix store for this CPU example. Arbitrary models may exercise other ONNX Runtime code paths, so each bundle runs a model smoke test during build and should be tested on the board.
+The shell launcher uses the packaged loader and library directory. ELF interpreter, `DT_NEEDED`, RPATH and AArch64 class are checked during packaging. Some upstream ELF files retain embedded Nix store strings in diagnostic or provider-path data; their counts are recorded in the manifest. Clean Debian and physical UNO Q execution showed they did not require a Nix store for this CPU example. Arbitrary models may exercise other ONNX Runtime code paths, so each bundle runs a model smoke test during build and should be tested on the board.
 
 For build-side integration, run `nix build .#checks.aarch64-linux.uno-q-demo`; on an ARM64 Linux host with Docker, run `tests/clean-debian.sh result/edge-inference.tar.gz`. The latter uses a network-disabled Debian 13 container and checks inference, corruption, missing library, bad input shape, and wrong expected output. The container check is not a physical board check.
 
 ## Measurements
 
 For the current MNIST candidate, the 2026-10-22 ARM64 Docker build produced a 14,257,017-byte compressed archive, a roughly 44 MiB extracted directory, and a 26,143-byte ONNX model. Its archive SHA-256 is `4ff12a1c924964f387ab5fe93219a488076ab870dda7ee434816c94dc2a0ff54`. These are build and container measurements; `result/size.txt` and `result/edge-inference.tar.gz.sha256` give values for each new build. Peak resident memory, cold/warm inference latency, board storage usage, and 2 GB UNO Q fit are **PENDING physical measurement**. Capture them on the board with `/usr/bin/time -v ./bin/edge-validate ...` if that normal Debian utility is available, and repeat an inference for warm timing.
+
+On 2026-10-23, the archive with that SHA-256 passed `edge-run --check`, produced the expected MNIST class 7, and passed `edge-validate` on a physical UNO Q. The device reported Debian 13.1, AArch64, kernel `6.16.7-g0dd6551ae96b`, and system glibc 2.41. The runner reported bundled glibc 2.42 and ONNX Runtime 1.24.4. An ONNX Runtime GPU discovery warning appeared, with no effect on CPU inference.
