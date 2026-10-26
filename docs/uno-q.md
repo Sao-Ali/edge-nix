@@ -29,6 +29,18 @@ edgeNix.lib.mkInferenceBundle pkgs {
 }
 ```
 
+For a separate configuration file, use `edgeNix.lib.mkEdgeSystem pkgs
+(import ./edge.nix)` in your consumer flake. See the complete
+[consumer configuration](../examples/consumer/edge.nix) and
+[flake wiring](../examples/consumer/flake.nix). The configuration requires a
+name, model, `target.device = "arduino-uno-q"`, `target.accelerator = "cpu"`,
+`runtime.backend = "onnxruntime"`, and validation input and expected-output
+paths. `quantization.enable = true` selects dynamic INT8; `type =
+"dynamic-int8"` is the only supported type. `maxModelBytes` is optional.
+The builder validates the fixture and model during every build. The
+configuration file is imported by the consumer flake; `nix build` does not
+discover it automatically.
+
 The first runner accepts rectangular numeric JSON tensors with ONNX `tensor(float)` or `tensor(int64)` inputs and outputs. Shapes must match each fixed model dimension; dynamic dimensions are allowed. JSON int64 values must be exact integers within ±(2^53−1). Input keys must match ONNX input names. Expected output JSON supports `shape`, flattened `argmax`, and `values` with optional `atol` and `rtol`, as in [the MNIST fixture](../examples/mnist/expected.json). Models using external ONNX data are rejected during preparation.
 
 ## Run on the board

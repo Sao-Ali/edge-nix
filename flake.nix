@@ -15,6 +15,10 @@
         inherit pkgs;
         nixpkgsRev = nixpkgs.rev or "unknown";
       };
+      lib.mkEdgeSystem = pkgs: import ./lib/mk-edge-system.nix {
+        inherit pkgs;
+        mkInferenceBundle = self.lib.mkInferenceBundle pkgs;
+      };
 
       packages = forSystems (pkgs:
         let
@@ -62,6 +66,29 @@
       checks = forSystems (pkgs:
         let
           packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+          model = import ./examples/mnist/model.nix { inherit pkgs; };
+          configuredUnoQ = self.lib.mkEdgeSystem pkgs {
+            name = "mnist-uno-q";
+            inherit model;
+            target = { device = "arduino-uno-q"; accelerator = "cpu"; };
+            runtime.backend = "onnxruntime";
+            validation = {
+              sampleInput = ./examples/mnist/sample.json;
+              expectedOutput = ./examples/mnist/expected.json;
+            };
+          };
+          configuredUnoQInt8 = self.lib.mkEdgeSystem pkgs {
+            name = "mnist-uno-q-int8";
+            inherit model;
+            target = { device = "arduino-uno-q"; accelerator = "cpu"; };
+            runtime.backend = "onnxruntime";
+            quantization = { enable = true; type = "dynamic-int8"; };
+            maxModelBytes = 1048576;
+            validation = {
+              sampleInput = ./examples/mnist/sample.json;
+              expectedOutput = ./examples/mnist/expected.json;
+            };
+          };
           mkValidation = bundle: sample: expected: extraArgs:
             pkgs.runCommand "${bundle.name}-validation" { } ''
             ${bundle}/bin/edge-validate \
@@ -78,6 +105,20 @@
           demo-int64 = mkValidation packages.demo-int64
             ./examples/int64-identity/sample.json ./examples/int64-identity/expected.json "";
         } // pkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-linux") {
+          uno-q-config-equivalence =
+            assert pkgs.lib.assertMsg (configuredUnoQ.drvPath == packages.uno-q-demo.drvPath)
+              "edge-nix: configuration API changed the UNO Q bundle derivation";
+            assert pkgs.lib.assertMsg (configuredUnoQInt8.drvPath == packages.uno-q-demo-int8.drvPath)
+              "edge-nix: configuration API changed the INT8 UNO Q bundle derivation";
+            pkgs.runCommand "uno-q-config-equivalence" { } ''
+              cmp ${configuredUnoQ}/edge-inference.tar.gz ${packages.uno-q-demo}/edge-inference.tar.gz
+              cmp ${configuredUnoQ}/check.json ${packages.uno-q-demo}/check.json
+              cmp ${configuredUnoQ}/validate.json ${packages.uno-q-demo}/validate.json
+              cmp ${configuredUnoQInt8}/edge-inference.tar.gz ${packages.uno-q-demo-int8}/edge-inference.tar.gz
+              cmp ${configuredUnoQInt8}/check.json ${packages.uno-q-demo-int8}/check.json
+              cmp ${configuredUnoQInt8}/validate.json ${packages.uno-q-demo-int8}/validate.json
+              cp ${configuredUnoQ}/validate.json "$out"
+            '';
           uno-q-demo = pkgs.runCommand "uno-q-demo-check" { } ''
             cp ${packages.uno-q-demo}/validate.json "$out"
           '';

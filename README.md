@@ -27,6 +27,12 @@ cd edge-inference
 
 See [the UNO Q guide](docs/uno-q.md) for the API, ABI contract, validation, limitations, and current evidence. The tested archive ran without installing Nix, Python packages, or ONNX Runtime on the UNO Q. This is one-model hardware validation, not a general performance or model-compatibility claim.
 
+To configure a self-contained UNO Q bundle in your own flake, call
+`edgeNix.lib.mkEdgeSystem pkgs (import ./edge.nix)`. The
+[consumer example](examples/consumer/edge.nix) shows the configuration and its
+[flake wiring](examples/consumer/flake.nix). It requires a native
+`aarch64-linux` builder and validation fixtures.
+
 ## What you give it and what you get
 
 You add `edge-nix` as an input to your own Nix flake and pass a path to a single-file `.onnx` model as `modelFile`. There is no upload service: Nix reads that file during the build. Set `quantization` to `"none"` or `"dynamic-int8"`, and optionally set `maxModelBytes` to reject an oversized prepared model. JSON input and expected-output fixtures are optional for packaging but let you check inference in your pipeline.
@@ -102,6 +108,8 @@ The INT8 check also compares its scores with the FP32 model on the sample image.
 `demo-int64` is a generated two-element integer identity model. Its check exercises the same bundle and validator with a non-float input and exact output values.
 
 GitHub Actions runs these three checks and the separate consumer flake check on x86_64 Linux, aarch64 Linux, and Apple Silicon macOS for pushes and pull requests. The VM test remains a separate Linux check.
+On ARM64 Linux it also checks that the configuration API produces the same UNO Q
+derivation, archive, inference output, and validation result as the direct API.
 
 ## VM test
 

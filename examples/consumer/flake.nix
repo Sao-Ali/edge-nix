@@ -17,6 +17,8 @@
           modelFile = ./model.onnx;
           maxModelBytes = 4096;
         };
+      } // pkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-linux") {
+        uno-q = edgeNix.lib.mkEdgeSystem pkgs (import ./edge.nix);
       });
 
       checks = forSystems (pkgs: {
