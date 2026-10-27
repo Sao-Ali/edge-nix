@@ -1,8 +1,8 @@
 # edge-nix
 
-`edge-nix` uses Nix to package ONNX models for edge inference. A developer supplies a model and build settings, then gets a transferable archive with the prepared model and a manifest. Nix coordinates existing tools and records the build inputs. `edge-nix` does not transfer files to a device.
+`edge-nix` uses declarative Nix recipes to build and validate ONNX inference artifacts for edge devices. A developer supplies a model and build settings; Nix coordinates model preparation, packaging, and validation into a traceable, transferable archive. The current outputs are a model-only archive and an Arduino UNO Q CPU inference bundle. `edge-nix` does not transfer files to a device.
 
-The V1 backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. Its archive contains only a model and manifest; its host-side commands still require Nix. A separate Arduino UNO Q inference bundle includes a native ARM64 CPU runner and runtime libraries. The MNIST example passed in a clean ARM64 Debian container and on a physical UNO Q; resource measurements and broader model coverage remain pending.
+The V1 model-only backend accepts a single-file ONNX model, optionally applies ONNX Runtime's dynamic INT8 quantization, and packages it for ONNX Runtime's CPU provider. A recipe can set a maximum model size. Its archive contains only a model and manifest; its host-side commands still require Nix. The UNO Q bundle includes a native ARM64 CPU runner and runtime libraries. The MNIST example passed in a clean ARM64 Debian container and on a physical UNO Q; resource measurements and broader model coverage remain pending.
 
 ## UNO Q inference candidate
 
@@ -11,7 +11,8 @@ On a native `aarch64-linux` Nix builder:
 ```sh
 nix build .#uno-q-demo
 tar -tzf result/edge-inference.tar.gz | head
-scp result/edge-inference.tar.gz arduino@<UNO_Q_IP>:/tmp/
+UNO_Q_IP=YOUR_BOARD_IP # replace with your board's IP address
+scp result/edge-inference.tar.gz "arduino@${UNO_Q_IP}:/tmp/"
 ```
 
 On the stock Debian Linux MPU:

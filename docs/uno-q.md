@@ -12,7 +12,8 @@ Use a native `aarch64-linux` Nix builder. An x86_64 Linux or macOS build of this
 nix build .#uno-q-demo
 tar -tzf result/edge-inference.tar.gz | head
 sha256sum -c result/edge-inference.tar.gz.sha256
-scp result/edge-inference.tar.gz arduino@192.168.1.247:/tmp/
+UNO_Q_IP=YOUR_BOARD_IP # replace with your board's IP address
+scp result/edge-inference.tar.gz "arduino@${UNO_Q_IP}:/tmp/"
 ```
 
 For another model, use `edgeNix.lib.mkInferenceBundle pkgs` on an ARM64 Linux package set:
@@ -45,8 +46,10 @@ The first runner accepts rectangular numeric JSON tensors with ONNX `tensor(floa
 
 ## Run on the board
 
+With `UNO_Q_IP` set on the build host as above:
+
 ```sh
-ssh arduino@192.168.1.247
+ssh "arduino@${UNO_Q_IP}"
 mkdir -p ~/edge-inference
 cd ~/edge-inference
 tar -xzf /tmp/edge-inference.tar.gz
