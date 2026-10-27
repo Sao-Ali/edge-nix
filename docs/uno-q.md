@@ -2,7 +2,7 @@
 
 This path runs ONNX Runtime's CPU provider on the QRB2210 Debian Linux MPU. It does not use the Qualcomm GPU, DSP, NPU, QNN, or the STM32 MCU. The archive includes a native AArch64 runner, ONNX Runtime, its ELF dependency closure, a bundled glibc loader, model, manifest, and validation fixture. Nix, Python, and ONNX Runtime installation are not required on the board.
 
-**Status:** clean ARM64 Debian container and one physical UNO Q MNIST smoke test passed. Resource measurements and broader model coverage remain pending. See [the environment record](uno-q-environment.md).
+**Validation status:** the MNIST bundle passed in a clean ARM64 Debian container and on one physical UNO Q. Peak memory, latency, and board storage use remain unmeasured; broader model coverage remains untested. See [the environment record](uno-q-environment.md).
 
 ## Build and transfer
 
@@ -76,8 +76,10 @@ The shell launcher uses the packaged loader and library directory. ELF interpret
 
 For build-side integration, run `nix build .#checks.aarch64-linux.uno-q-demo`; on an ARM64 Linux host with Docker, run `tests/clean-debian.sh result/edge-inference.tar.gz`. The latter uses a network-disabled Debian 13 container and checks inference, corruption, missing library, bad input shape, and wrong expected output. The container check is not a physical board check.
 
-## Measurements
+## Verified physical UNO Q result
 
-For the current MNIST candidate, the 2026-10-22 ARM64 Docker build produced a 14,257,017-byte compressed archive, a roughly 44 MiB extracted directory, and a 26,143-byte ONNX model. Its archive SHA-256 is `4ff12a1c924964f387ab5fe93219a488076ab870dda7ee434816c94dc2a0ff54`. These are build and container measurements; `result/size.txt` and `result/edge-inference.tar.gz.sha256` give values for each new build. Peak resident memory, cold/warm inference latency, board storage usage, and 2 GB UNO Q fit are **PENDING physical measurement**. Capture them on the board with `/usr/bin/time -v ./bin/edge-validate ...` if that normal Debian utility is available, and repeat an inference for warm timing.
+On 2026-10-23, the archive with SHA-256 `4ff12a1c924964f387ab5fe93219a488076ab870dda7ee434816c94dc2a0ff54` passed `edge-run --check`, produced the expected MNIST class 7, and passed `edge-validate` on a physical UNO Q. The device reported Debian 13.1, AArch64, kernel `6.16.7-g0dd6551ae96b`, and system glibc 2.41. The runner reported bundled glibc 2.42 and ONNX Runtime 1.24.4. An ONNX Runtime GPU discovery warning appeared, with no effect on CPU inference.
 
-On 2026-10-23, the archive with that SHA-256 passed `edge-run --check`, produced the expected MNIST class 7, and passed `edge-validate` on a physical UNO Q. The device reported Debian 13.1, AArch64, kernel `6.16.7-g0dd6551ae96b`, and system glibc 2.41. The runner reported bundled glibc 2.42 and ONNX Runtime 1.24.4. An ONNX Runtime GPU discovery warning appeared, with no effect on CPU inference.
+## Measurements still needed
+
+For the current MNIST candidate, the 2026-10-22 ARM64 Docker build produced a 14,257,017-byte compressed archive, a roughly 44 MiB extracted directory, and a 26,143-byte ONNX model. Its archive SHA-256 is `4ff12a1c924964f387ab5fe93219a488076ab870dda7ee434816c94dc2a0ff54`. These are build and container measurements; `result/size.txt` and `result/edge-inference.tar.gz.sha256` give values for each new build. Peak resident memory, cold/warm inference latency, board storage usage, and 2 GB UNO Q fit still need physical measurement. Capture them on the board with `/usr/bin/time -v ./bin/edge-validate ...` if that normal Debian utility is available, and repeat an inference for warm timing.

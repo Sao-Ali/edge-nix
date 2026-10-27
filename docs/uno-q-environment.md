@@ -2,9 +2,9 @@
 
 The first inference target is the QRB2210 Linux MPU, not the STM32U585 MCU. [Arduino's board page](https://docs.arduino.cc/hardware/uno-q/) identifies Debian Linux on the MPU and a quad-core Cortex-A53. [Qualcomm's board page](https://www.qualcomm.com/developer/hardware/arduino-uno-q) lists 2 GB and 4 GB variants. The bundle is sized for the 2 GB variant, but peak memory on that board is not yet measured.
 
-## Physical board probe
+## Additional physical board probes
 
-Run the following on the UNO Q, then record the output with the bundle test. These commands do not modify the board.
+The MNIST smoke test below has already passed on a physical UNO Q. Run the following on the board to fill in the remaining environment and resource details. These commands do not modify the board.
 
 ```sh
 uname -a
